@@ -5,6 +5,16 @@ A complete end-to-end encrypted chat application that enables secure conversatio
 ![Project Status](https://img.shields.io/badge/Status-Complete-brightgreen)
 ![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
+<img width="1901" height="853" alt="image" src="https://github.com/user-attachments/assets/e20db877-0250-4a3d-a8b8-0bf53048fd18" />
+
+
+Post Initialization:
+<img width="1916" height="861" alt="image" src="https://github.com/user-attachments/assets/9336548f-8246-4ce3-90d4-e7f73c624314" />
+
+
+Chat:
+<img width="1847" height="815" alt="image" src="https://github.com/user-attachments/assets/566e3d6e-8c75-4d0b-bb40-66bd199f9540" />
+
 
 ## 🌟 Features
 
