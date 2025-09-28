@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  encrypted-llm-streamlit:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./certs:/app/certs
+      - ./models_cache:/root/.cache/huggingface
+    environment:
+      - PYTHONPATH=/app
+      - STREAMLIT_SERVER_PORT=8501
+    command: python launch_streamlit.py
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  encrypted-llm-gradio:
+    build: .
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./certs:/app/certs
+      - ./models_cache:/root/.cache/huggingface
+    environment:
+      - PYTHONPATH=/app
+      - GRADIO_SERVER_PORT=7860
+    command: python launch_gradio.py
+    restart: unless-stopped
+    profiles: ["gradio"]
+
+volumes:
+  models_cache:
+    driver: local
