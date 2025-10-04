@@ -219,9 +219,7 @@ We welcome contributions! Here's how you can help:
 4. **📚 Documentation**: Help improve our guides
 5. **🧪 Testing**: Test on different systems and models
 
-## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
@@ -232,12 +230,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Python Cryptography**: Secure encryption primitives
 - **Streamlit & Gradio**: Amazing web frameworks
 
-## 📞 Support
 
-- **📖 Documentation**: Start with [SETUP_GUIDE.md](SETUP_GUIDE.md)
-- **🐛 Issues**: GitHub Issues for bug reports
-- **💬 Discussions**: GitHub Discussions for questions
-- **📧 Contact**: [Your contact information]
 
 ## 🌟 Star History
 
