@@ -4,7 +4,14 @@ A complete end-to-end encrypted chat application that enables secure conversatio
 
 ![Project Status](https://img.shields.io/badge/Status-Complete-brightgreen)
 ![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue)
-![License](https://img.shields.io/badge/License-MIT-green)
+
+Post Initialization:
+<img width="1916" height="861" alt="image" src="https://github.com/user-attachments/assets/9336548f-8246-4ce3-90d4-e7f73c624314" />
+
+
+Chat:
+<img width="1847" height="815" alt="image" src="https://github.com/user-attachments/assets/566e3d6e-8c75-4d0b-bb40-66bd199f9540" />
+
 
 ## 🌟 Features
 
@@ -212,9 +219,7 @@ We welcome contributions! Here's how you can help:
 4. **📚 Documentation**: Help improve our guides
 5. **🧪 Testing**: Test on different systems and models
 
-## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
@@ -225,12 +230,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Python Cryptography**: Secure encryption primitives
 - **Streamlit & Gradio**: Amazing web frameworks
 
-## 📞 Support
 
-- **📖 Documentation**: Start with [SETUP_GUIDE.md](SETUP_GUIDE.md)
-- **🐛 Issues**: GitHub Issues for bug reports
-- **💬 Discussions**: GitHub Discussions for questions
-- **📧 Contact**: [Your contact information]
 
 ## 🌟 Star History
 
