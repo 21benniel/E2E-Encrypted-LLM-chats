@@ -7,10 +7,11 @@ This is the core component that combines crypto and LLM functionality.
 
 import time
 import json
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 
 from crypto.key_manager import KeyManager
 from crypto.message_crypto import MessageCrypto
+from crypto.conversation_memory import EncryptedConversationMemory
 from llm.model_manager import ModelManager
 
 
@@ -28,7 +29,9 @@ class EncryptedLLM:
         self,
         model_name: str = "phi-3-mini",
         key_type: str = "rsa",
-        certs_dir: str = "certs"
+        certs_dir: str = "certs",
+        enable_memory: bool = True,
+        memory_storage_dir: str = "conversations"
     ):
         """
         Initialize EncryptedLLM.
@@ -37,14 +40,33 @@ class EncryptedLLM:
             model_name: LLM model to use
             key_type: Encryption type ("rsa" or "ecc")
             certs_dir: Directory containing certificates
+            enable_memory: Enable persistent conversation memory
+            memory_storage_dir: Directory for conversation storage
         """
         self.model_name = model_name
         self.key_type = key_type
+        self.enable_memory = enable_memory
         
         # Initialize components
         self.key_manager = KeyManager(certs_dir)
         self.crypto = MessageCrypto()
         self.model_manager = ModelManager(model_name)
+        
+        # Initialize memory system if enabled
+        if self.enable_memory:
+            try:
+                user_key_file = f"{certs_dir}/user_{key_type}_private_key.pem"
+                self.memory = EncryptedConversationMemory(
+                    storage_dir=memory_storage_dir,
+                    user_key_file=user_key_file
+                )
+                print("✅ Encrypted conversation memory enabled")
+            except Exception as e:
+                print(f"⚠️  Failed to initialize memory: {e}")
+                self.memory = None
+                self.enable_memory = False
+        else:
+            self.memory = None
         
         # Load keys
         self._load_keys()
@@ -96,19 +118,25 @@ class EncryptedLLM:
     def process_encrypted_prompt(
         self,
         encrypted_bundle: str,
-        generation_params: Optional[Dict[str, Any]] = None
+        generation_params: Optional[Dict[str, Any]] = None,
+        conversation_id: Optional[str] = None,
+        use_context: bool = True
     ) -> str:
         """
         Process an encrypted prompt and return encrypted response.
         
         This is the main method that implements the secure LLM flow:
         1. Decrypt incoming prompt
-        2. Generate LLM response  
-        3. Encrypt response for user
+        2. Load conversation context if available
+        3. Generate LLM response with context
+        4. Save to conversation memory
+        5. Encrypt response for user
         
         Args:
             encrypted_bundle: Encrypted prompt from user
             generation_params: Optional parameters for text generation
+            conversation_id: Optional conversation ID for memory
+            use_context: Whether to use conversation context
             
         Returns:
             Encrypted response bundle for user
@@ -129,7 +157,32 @@ class EncryptedLLM:
             print(f"   📝 Decrypted prompt: {decrypted_prompt}")
             print(f"   📋 Metadata: {json.dumps(metadata, indent=2)}")
             
-            # Step 2: Generate LLM response
+            # Step 2: Handle conversation memory
+            conversation_context = ""
+            if self.enable_memory and conversation_id and use_context:
+                try:
+                    conversation_context = self.memory.get_conversation_context(
+                        conversation_id, 
+                        max_messages=10, 
+                        max_tokens=1500
+                    )
+                    if conversation_context:
+                        print(f"   🧠 Loaded conversation context ({len(conversation_context)} chars)")
+                except Exception as e:
+                    print(f"   ⚠️  Failed to load context: {e}")
+            
+            # Step 3: Build enhanced prompt with context
+            if conversation_context:
+                enhanced_prompt = f"""Previous conversation:
+{conversation_context}
+
+Current message:
+Human: {decrypted_prompt}
+Assistant:"""
+            else:
+                enhanced_prompt = decrypted_prompt
+            
+            # Step 4: Generate LLM response
             print("🧠 Generating LLM response...")
             start_time = time.time()
             
@@ -144,7 +197,7 @@ class EncryptedLLM:
             default_params.update(gen_params)
             
             llm_response = self.model_manager.generate_response(
-                decrypted_prompt,
+                enhanced_prompt,
                 **default_params
             )
             
@@ -152,7 +205,38 @@ class EncryptedLLM:
             print(f"   🤖 Generated response: {llm_response}")
             print(f"   ⏱️  Generation time: {generation_time:.2f}s")
             
-            # Step 3: Encrypt response for user
+            # Step 5: Save to conversation memory
+            if self.enable_memory and conversation_id:
+                try:
+                    # Save user message
+                    self.memory.add_message(
+                        conversation_id, 
+                        "user", 
+                        decrypted_prompt, 
+                        metadata
+                    )
+                    
+                    # Save assistant response
+                    response_metadata = {
+                        "generation_time_seconds": round(generation_time, 2),
+                        "model_name": self.model_name,
+                        "generation_params": default_params,
+                        "context_used": bool(conversation_context)
+                    }
+                    
+                    self.memory.add_message(
+                        conversation_id, 
+                        "assistant", 
+                        llm_response, 
+                        response_metadata
+                    )
+                    
+                    print(f"   💾 Saved to conversation: {conversation_id}")
+                    
+                except Exception as e:
+                    print(f"   ⚠️  Failed to save to memory: {e}")
+            
+            # Step 6: Encrypt response for user
             print("🔐 Encrypting response for user...")
             response_metadata = {
                 "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -160,7 +244,9 @@ class EncryptedLLM:
                 "generation_time_seconds": round(generation_time, 2),
                 "original_prompt_hash": hash(decrypted_prompt) % 10000,
                 "response_length": len(llm_response),
-                "generation_params": default_params
+                "generation_params": default_params,
+                "conversation_id": conversation_id,
+                "context_used": bool(conversation_context)
             }
             
             encrypted_response = self._encrypt_response_for_user(llm_response, response_metadata)
@@ -175,7 +261,8 @@ class EncryptedLLM:
             error_metadata = {
                 "error": True,
                 "error_type": type(e).__name__,
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ")
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "conversation_id": conversation_id
             }
             return self._encrypt_response_for_user(error_response, error_metadata)
     
@@ -186,6 +273,124 @@ class EncryptedLLM:
             self.user_public_key,
             metadata
         )
+    
+    # Conversation Management Methods
+    
+    def create_conversation(self, title: str = None, tags: List[str] = None) -> Optional[str]:
+        """Create a new conversation and return its ID."""
+        if not self.enable_memory:
+            print("⚠️  Memory is disabled. Cannot create conversation.")
+            return None
+        
+        try:
+            return self.memory.create_conversation(
+                title=title,
+                model_name=self.model_name,
+                encryption_type=self.key_type,
+                tags=tags
+            )
+        except Exception as e:
+            print(f"❌ Failed to create conversation: {e}")
+            return None
+    
+    def list_conversations(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """List recent conversations."""
+        if not self.enable_memory:
+            return []
+        
+        try:
+            conversations = self.memory.list_conversations(limit)
+            return [
+                {
+                    "id": conv.conversation_id,
+                    "title": conv.title,
+                    "created_at": conv.created_at,
+                    "last_updated": conv.last_updated,
+                    "message_count": conv.message_count,
+                    "model_name": conv.model_name,
+                    "tags": conv.tags
+                }
+                for conv in conversations
+            ]
+        except Exception as e:
+            print(f"❌ Failed to list conversations: {e}")
+            return []
+    
+    def get_conversation_history(self, conversation_id: str, limit: int = None) -> List[Dict[str, Any]]:
+        """Get conversation history in a format suitable for UI."""
+        if not self.enable_memory:
+            return []
+        
+        try:
+            messages = self.memory.get_conversation_messages(conversation_id, limit)
+            return [
+                {
+                    "role": msg.role,
+                    "content": msg.content,
+                    "timestamp": msg.timestamp,
+                    "metadata": msg.metadata
+                }
+                for msg in messages
+            ]
+        except Exception as e:
+            print(f"❌ Failed to get conversation history: {e}")
+            return []
+    
+    def delete_conversation(self, conversation_id: str) -> bool:
+        """Delete a conversation."""
+        if not self.enable_memory:
+            return False
+        
+        try:
+            return self.memory.delete_conversation(conversation_id)
+        except Exception as e:
+            print(f"❌ Failed to delete conversation: {e}")
+            return False
+    
+    def search_conversations(self, query: str) -> List[Dict[str, Any]]:
+        """Search conversations."""
+        if not self.enable_memory:
+            return []
+        
+        try:
+            conversations = self.memory.search_conversations(query)
+            return [
+                {
+                    "id": conv.conversation_id,
+                    "title": conv.title,
+                    "created_at": conv.created_at,
+                    "message_count": conv.message_count,
+                    "tags": conv.tags
+                }
+                for conv in conversations
+            ]
+        except Exception as e:
+            print(f"❌ Failed to search conversations: {e}")
+            return []
+    
+    def export_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+        """Export a conversation."""
+        if not self.enable_memory:
+            return None
+        
+        try:
+            return self.memory.export_conversation(conversation_id)
+        except Exception as e:
+            print(f"❌ Failed to export conversation: {e}")
+            return None
+    
+    def get_memory_stats(self) -> Dict[str, Any]:
+        """Get memory system statistics."""
+        if not self.enable_memory:
+            return {"memory_enabled": False}
+        
+        try:
+            stats = self.memory.get_storage_stats()
+            stats["memory_enabled"] = True
+            return stats
+        except Exception as e:
+            print(f"❌ Failed to get memory stats: {e}")
+            return {"memory_enabled": True, "error": str(e)}
     
     def chat_session(self):
         """Run an interactive encrypted chat session."""
